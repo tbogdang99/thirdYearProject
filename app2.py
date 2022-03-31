@@ -5,9 +5,6 @@ import cv2
 from PIL import Image, ImageEnhance
 
 
-import os
-import glob
-import time
 import numpy as np
 import concurrent.futures
 from pathlib import Path
@@ -71,8 +68,6 @@ class BaseColor(nn.Module):
 	def unnormalize_ab(self, in_ab):
 		return in_ab*self.ab_norm
 
-
-from IPython import embed
 
 
 class ECCVGenerator(BaseColor):
@@ -432,11 +427,15 @@ uploaded_file = None
 st.set_page_config(layout="wide")
 sidebar_title = '<p style="text-align: center; font-family:Courier; color:#DDC5A2; font-family: Cooper Black; font-size: 40px;">ColorAIze</p>'
 st.sidebar.markdown(sidebar_title, unsafe_allow_html=True)
+
 add_selectbox = st.sidebar.selectbox(
     "Choose the page you would like to acess",
     ("Home Page 🏠","Upload 📎", "Take picture 📷")
 )
 
+sidebar_FindMore = '<p style="text-align: left; font-family:Courier; color:#DDC5A2; font-family: Cooper Black; font-size: 40px;">Find More</p>'
+st.sidebar.markdown(sidebar_FindMore, unsafe_allow_html=True)
+st.sidebar.write("Check out this [link](https://github.com/tbogdang99/thirdYearProject) if you want to see the source code")
 img = None
 option = "Pix2PixModel"
 
@@ -638,10 +637,10 @@ if add_selectbox == "Upload 📎":
         with col2:
             option2 = st.selectbox(
             'Select weigths',
-            ('Random Weights', 'Unet Coco Dataset'))
+            ('Random Weights', 'Coco Dataset'))
             if option2 =='Random Weights':
                 model = ECCVGenerator()           
-            elif option2 == 'Unet Coco Dataset':
+            elif option2 == 'Coco Dataset':
                 model = ECCVGenerator()
                 model.load_state_dict(torch.load("ECCVWEIGHTS.pth", map_location=device))
 
@@ -790,13 +789,23 @@ if add_selectbox == "Take picture 📷":
                 model = MainModel(net_G=net_G_loaded)
                 model.load_state_dict(torch.load("UNET_with_Resnet34_pretrained_CELEBA/UnetTrainedByMe18000picturescelebADataset_using_pretrained_Resnet34_18000pictures.pth", map_location=device)) 
 
+    if option == "ECCVGenerator":
+        with col2:
+            option2 = st.selectbox(
+            'Select weigths',
+            ('Random Weights', 'Coco Dataset'))
+            if option2 =='Random Weights':
+                model = ECCVGenerator()           
+            elif option2 == 'Coco Dataset':
+                model = ECCVGenerator()
+                model.load_state_dict(torch.load("ECCVWEIGHTS.pth", map_location=device))
+
     if picture:
         uploaded_file = picture
         
 
 
     
-#Add 'before' and 'after' columns
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     original_width, original_height = image.size
@@ -828,8 +837,6 @@ if uploaded_file is not None:
         dim = (width, height)
         resized = cv2.resize(img_l, (original_width, original_height), interpolation = cv2.INTER_AREA)
         st.image(resized,clamp = True, use_column_width = 'always')
-        #img = Image.fromarray((resized).astype(np.uint8))
-#        cv2.imwrite("black_and_white.png", resized)
         img = Image.fromarray((img_l * 255).astype(np.uint8))
         img = img.resize((original_width, original_height), Image.ANTIALIAS)
 
@@ -873,20 +880,36 @@ if uploaded_file is not None:
     elif option == "ECCVGenerator":
         with col3:
             st.markdown('<p style="text-align: left; font-family:Courier; color:#DDC5A2; font-family: Cooper Black; font-size: 25px;"">Colorized automatically</p>',unsafe_allow_html=True)
-            list = []
-            list.append(uploaded_file)
-            dataset = ColorizationDataset2(list)
-            training_dataloader = DataLoader(dataset, batch_size=1, num_workers = 2)
-            iterator = iter(training_dataloader)
-            data = next(iterator)
-            model.eval()
-            fake_color = model.forward(data['L'])
-            fake_color = fake_color.detach()
-            L = data['L']
-            out_lab_orig = torch.cat((L, fake_color), dim=1)
-            img = lab2rgb(out_lab_orig.data.cpu().numpy()[0,...].transpose((1,2,0)))
-            #fake_imgs = labtorgb(L, fake_color)
-            st.image(img, width = 256)
+            with st.spinner('Wait for it...'):
+                list = []
+                list.append(uploaded_file)
+                dataset = ColorizationDataset2(list)
+                training_dataloader = DataLoader(dataset, batch_size=1, num_workers = 2)
+                iterator = iter(training_dataloader)
+                data = next(iterator)
+                model.eval()
+                fake_color = model.forward(data['L'])
+                fake_color = fake_color.detach()
+                L = data['L']
+                out_lab_orig = torch.cat((L, fake_color), dim=1)
+                img = lab2rgb(out_lab_orig.data.cpu().numpy()[0,...].transpose((1,2,0)))
+
+                rgb_img = []
+                rgb_img.append(img)
+                rgb_img2 = np.stack(rgb_img, axis=0)
+                img2 = np.squeeze(rgb_img2)
+                img2 = Image.fromarray((img2 * 255).astype(np.uint8))
+                img2 = img2.resize((original_width, original_height), Image.ANTIALIAS)
+                img2.save('colorized.png')
+                st.image(img2,use_column_width = 'always')
+        if img is not None:
+            with open("colorized.png", "rb") as file:
+                btn = st.download_button(
+                label="Download the colorized image",
+                data=file,
+                file_name="colorized.png",
+                mime="image/png"
+                )   
 
 
 
